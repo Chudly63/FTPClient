@@ -20,6 +20,8 @@ Output:
 def establish_control_connection(network, port = 21):
     CONTROL = socket(AF_INET, SOCK_STREAM)
     CONTROL.connect((network, port))
+    if verbose:
+        print("Waiting for reply")
     reply = CONTROL.recv(1024)
     if verbose:
         print(reply)
@@ -50,6 +52,10 @@ def ftp_user(username):
         print(msg)
     
     CONTROL_SOCKET.send(msg)
+
+    if verbose:
+        print("Waiting for reply")
+
     reply = CONTROL_SOCKET.recv(1024)
     
     if verbose:
@@ -79,6 +85,10 @@ def ftp_pass(password):
         print(msg)
 
     CONTROL_SOCKET.send(msg)
+
+    if verbose:
+        print("Waiting for reply")
+
     reply = CONTROL_SOCKET.recv(1024)
 
     if verbose:
