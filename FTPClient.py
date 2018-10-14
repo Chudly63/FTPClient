@@ -6,6 +6,7 @@ from socket import *
 CONTROL_SOCKET = None
 DATA_SOCKET = None
 
+verbose = True
 
 """
 Establishes the control connection between the client and the server
@@ -16,10 +17,10 @@ Output:
 
 """
 def establish_control_connection(network, port = 21):
-    global CONTROL_SOCKET
-    CONTROL_SOCKET = socket(AF_INET, SOCK_STREAM)
-    CONTROL_SOCKET.connect((network, port))
-    return 1
+    CONTROL = socket(AF_INET, SOCK_STREAM)
+    CONTROL.connect((network, port))
+    return CONTROL
+
 
 
 #ACCESS CONTROL COMMANDS
@@ -37,7 +38,20 @@ Output:
 
 """
 def ftp_user(username):
-    return 1
+    global CONTROL_SOCKET
+
+    msg = "USER " + username
+    
+    if verbose:
+        print(msg)
+    
+    CONTROL_SOCKET.send(msg)
+    reply = CONTROL_SOCKET.recv(1024)
+    
+    if verbose:
+        print(reply)
+
+    return reply
 
 
 """
@@ -199,6 +213,5 @@ Replies: 221, 214, 500, 501, 502, 421
 def ftp_help(argument = None):
     return 1
 
-print("Hello")
-establish_control_connection("10.246.251.93", 21)
-print("Hello")
+CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
+ftp_user("cs472")
