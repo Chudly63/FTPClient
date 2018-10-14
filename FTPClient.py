@@ -46,7 +46,7 @@ Output:
 def ftp_user(username):
     global CONTROL_SOCKET
 
-    msg = "USER " + username
+    msg = "USER " + username + CRLF
     
     if verbose:
         print(msg)
