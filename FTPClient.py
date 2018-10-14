@@ -7,6 +7,7 @@ CONTROL_SOCKET = None
 DATA_SOCKET = None
 
 verbose = True
+CRLF = "\r\n"
 
 """
 Establishes the control connection between the client and the server
@@ -67,7 +68,20 @@ Output:
 
 """
 def ftp_pass(password):
-    return 1
+    global CONTROL_SOCKET
+
+    msg = "PASS "+password+CRLF
+
+    if verbose:
+        print(msg)
+
+    CONTROL_SOCKET.send(msg)
+    reply = CONTROL_SOCKET.recv(1024)
+
+    if verbose:
+        print(reply)
+    
+    return reply
 
 
 """
@@ -215,3 +229,4 @@ def ftp_help(argument = None):
 
 CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 ftp_user("cs472")
+ftp_pass("hw2ftp")
