@@ -20,6 +20,9 @@ Output:
 def establish_control_connection(network, port = 21):
     CONTROL = socket(AF_INET, SOCK_STREAM)
     CONTROL.connect((network, port))
+    reply = CONTROL.recv(1024)
+    if verbose:
+        print(reply)
     return CONTROL
 
 
