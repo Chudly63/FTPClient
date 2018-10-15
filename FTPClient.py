@@ -244,7 +244,7 @@ Replies: 221, 214, 500, 501, 502, 421
 def ftp_help(argument = None):
     return 1
 
-CONTROL_SOCKET = establish_control_connection("110.246.251.93", 21)
+CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 if not CONTROL_SOCKET:
     exit()
 ftp_user("cs472")
