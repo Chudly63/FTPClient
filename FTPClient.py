@@ -1,6 +1,7 @@
 
 from socket import *
-
+from socket import error as socket_error
+import errno
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None
@@ -8,6 +9,11 @@ DATA_SOCKET = None
 
 verbose = True
 CRLF = "\r\n"
+
+
+def log(msg):
+    if verbose:
+        print(msg)
 
 """
 Establishes the control connection between the client and the server
@@ -19,13 +25,16 @@ Output:
 """
 def establish_control_connection(network, port = 21):
     CONTROL = socket(AF_INET, SOCK_STREAM)
-    CONTROL.connect((network, port))
-    if verbose:
-        print("Waiting for reply")
-    reply = CONTROL.recv(1024)
-    if verbose:
-        print(reply)
-    return CONTROL
+    CONTROL.settimeout(5)
+    try:
+        CONTROL.connect((network, port))
+        reply = CONTROL.recv(1024)
+        log(reply)
+        return CONTROL
+    except socket_error as e:
+        print("An unexpected error occured during connection establishment")
+        print(e)
+        return None
 
 
 
@@ -48,18 +57,13 @@ def ftp_user(username):
 
     msg = "USER " + username + CRLF
     
-    if verbose:
-        print(msg)
+    log(msg)
     
     CONTROL_SOCKET.send(msg)
 
-    if verbose:
-        print("Waiting for reply")
-
     reply = CONTROL_SOCKET.recv(1024)
     
-    if verbose:
-        print(reply)
+    log(reply)
 
     return reply
 
@@ -240,6 +244,8 @@ Replies: 221, 214, 500, 501, 502, 421
 def ftp_help(argument = None):
     return 1
 
-CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
+CONTROL_SOCKET = establish_control_connection("110.246.251.93", 21)
+if not CONTROL_SOCKET:
+    exit()
 ftp_user("cs472")
 ftp_pass("hw2ftp")
