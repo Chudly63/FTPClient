@@ -21,7 +21,8 @@ Input:
     str network : The network address of the server
     int port    : The port number of the server (default 21)
 Output:
-
+    On success, returns the socket for the control connection
+    On fail, returns None
 """
 def establish_control_connection(network, port = 21):
     CONTROL = socket(AF_INET, SOCK_STREAM)
@@ -60,7 +61,6 @@ def ftp_user(username):
     log(msg)
     
     CONTROL_SOCKET.send(msg)
-
     reply = CONTROL_SOCKET.recv(1024)
     
     log(reply)
@@ -85,18 +85,13 @@ def ftp_pass(password):
 
     msg = "PASS "+password+CRLF
 
-    if verbose:
-        print(msg)
+    log(msg)
 
     CONTROL_SOCKET.send(msg)
 
-    if verbose:
-        print("Waiting for reply")
-
     reply = CONTROL_SOCKET.recv(1024)
 
-    if verbose:
-        print(reply)
+    log(reply)
     
     return reply
 
