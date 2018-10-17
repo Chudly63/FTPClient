@@ -1,4 +1,4 @@
-#
+#!/usr/bin/env python
 # CS472 - Homework #2
 # Alex M Brown
 # FTPClient.py
@@ -10,6 +10,8 @@ from socket import error as socket_error
 import errno
 import argparse
 import sys
+import re
+import getpass
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None
@@ -17,8 +19,9 @@ DATA_SOCKET = None
 TARGET_ADDR = None
 TARGET_PORT = None
 LOG_FILE = None
+BUFFER_SIZE = 4000
 
-verbose = True
+verbose = False
 CRLF = "\r\n"
 
 
@@ -43,7 +46,7 @@ def establish_control_connection(network, port = 21):
         CONTROL.settimeout(5)
         CONTROL.connect((network, port))
         #CONTROL.settimeout(0)
-        reply = CONTROL.recv(1024)
+        reply = CONTROL.recv(BUFFER_SIZE)
         log(reply)
         return CONTROL
     except socket_error as e:
@@ -51,6 +54,19 @@ def establish_control_connection(network, port = 21):
         print(e)
         return None
 
+
+"""
+Converts the FTP format (h1,h2,h3,h4,p1,p2) into a socket address
+Input:
+    str headers : A string in the format (h1,h2,h3,h4,p1,p2)
+OutputL
+    tuple : (IP_ADDR, PORT_NUM)
+"""
+def get_socket_address(headers):
+    address_fields = headers.split(',')
+    DEST_IP = '.'.join(address_fields[0:4])
+    DEST_PORT = int(address_fields[4]) * 256 + int(address_fields[5])
+    return (DEST_IP,DEST_PORT)
 
 """
 Sends an FTP command over the control connection socket
@@ -64,13 +80,34 @@ def send_command(msg):
     try:
         if CONTROL_SOCKET:                                                             #Replace with code for establishing connection
             CONTROL_SOCKET.send(msg)
-            reply = CONTROL_SOCKET.recv(1024)
+            reply = CONTROL_SOCKET.recv(BUFFER_SIZE)
             log(reply)
             return reply
         return None
     except socket_error as e:
         print(e)
         return None
+
+
+"""
+Separates the response code and the response message from a server reply
+Input:
+    str reply: An FTP server message
+Output:
+    tuple : (Response Code, Response Message)
+"""
+def parse_response(reply):
+    if not reply:
+        return None
+
+    code = reply[0:3]
+    text = reply[4:-3]
+    return (code,text)
+
+
+def listen(socket):
+    return socket.recv(BUFFER_SIZE)
+
 
 #ACCESS CONTROL COMMANDS
 
@@ -90,7 +127,7 @@ def ftp_user(username):
     msg = "USER " + username + CRLF
     log(msg)
     
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -111,7 +148,7 @@ def ftp_pass(password):
     msg = "PASS "+password+CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
     
     return reply
 
@@ -131,7 +168,7 @@ def ftp_cwd(pathname):
     msg = "CWD "+pathname+CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply 
 
@@ -146,7 +183,7 @@ def ftp_quit():
     msg = "QUIT" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
     
     return reply
 
@@ -158,12 +195,13 @@ FTP PASV COMMAND
 Requests the server to listen on a data port and wait for a connection.
 Format: PASV<CRLF>
 Replies: 227, 500, 501, 421, 530
+Socket Address from server in the format h1,h2,h3,h4,p1,p2 where the ip address is h1.h2.h3.h4 and the port number is p1*256 + p2
 """
 def ftp_pasv():
     msg = "PASV" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -218,7 +256,7 @@ def ftp_retr(pathname):
     msg = "RETR "+pathname+CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -234,7 +272,7 @@ def ftp_stor(pathname):
     msg = "STOR "+pathname+CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -248,7 +286,7 @@ def ftp_pwd():
     msg = "PWD" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -270,7 +308,7 @@ def ftp_list(pathname = None):
         msg = "LIST" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -285,7 +323,7 @@ def ftp_syst():
     msg = "SYST" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
@@ -306,10 +344,24 @@ def ftp_help(argument = None):
         msg = "HELP" + CRLF
     log(msg)
 
-    reply = send_command(msg)
+    reply = parse_response(send_command(msg))
 
     return reply
 
+
+def ftp_login():
+    user = raw_input('Enter Username: ')
+    resp = ftp_user(user)
+    if resp[0] == '230':
+        return True
+    if resp[0] == '331':
+        pswd = getpass.getpass('Enter Password: ')
+        resp = ftp_pass(pswd)
+        if resp[0] == '230':
+            return True
+    
+    print(resp[1])
+    return False
 
 # 
 #   Read command line arguments. 
@@ -330,9 +382,55 @@ CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 #CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
 if not CONTROL_SOCKET:
     exit()
-ftp_user("cs472")
-ftp_pass("hw2ftp")
-ftp_pasv()
-ftp_pwd()
-ftp_syst()
-ftp_quit()
+
+if not ftp_login():
+    exit()
+
+while(True):
+    print("""\n\nSelect Command
+    1. Help
+    2. Print Directory
+    3. List Directory
+    4. Change Directory
+    5. Retrieve File
+    6. Store File
+    7. Show System Information
+    8. Quit
+    """)
+    choice = raw_input("Enter Selection: ")
+    if choice == '1':
+        print("Do Help")
+    elif choice == '2':
+        print("Do PWD")
+    elif choice == '3':
+        print("Do LIST")
+    elif choice == '4':
+        print("Do CWD")
+    elif choice == '5':
+        print("Do RETR")
+    elif choice == '6':
+        print("Do STOR")
+    elif choice == '7':
+        resp = ftp_syst()
+        print(resp[1])
+    elif choice == '8':
+        ftp_quit()
+        exit()
+    
+
+"""
+ftp_help()
+
+resp = ftp_pasv()
+if resp[0] == '227':
+    address = re.search('\(.*\)', resp[1])
+    address = address.group(0)[1:-1]
+    x = get_socket_address(address)
+    DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+    DATA_SOCKET.connect(x)
+ftp_list()
+
+print(listen(DATA_SOCKET))
+
+print(listen(CONTROL_SOCKET))
+"""
