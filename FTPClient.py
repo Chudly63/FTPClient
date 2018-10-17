@@ -42,7 +42,7 @@ def establish_control_connection(network, port = 21):
     try:
         CONTROL.settimeout(5)
         CONTROL.connect((network, port))
-        CONTROL.settimeout(0)
+        #CONTROL.settimeout(0)
         reply = CONTROL.recv(1024)
         log(reply)
         return CONTROL
