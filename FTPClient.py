@@ -12,6 +12,7 @@ import argparse
 import sys
 import re
 import getpass
+import datetime
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None
@@ -20,14 +21,16 @@ TARGET_ADDR = None
 TARGET_PORT = None
 LOG_FILE = None
 BUFFER_SIZE = 4000
-
-VERBOSE = True
+VERBOSE = False
 CRLF = "\r\n"
 
 
 
 
 def log(msg):
+    logfile = open(LOG_FILE,'a+')
+    logfile.write(str(datetime.datetime.now()) + ": "+msg + "\n")
+    logfile.close()
     if VERBOSE:
         print(msg)
 
@@ -47,7 +50,7 @@ def establish_control_connection(network, port = 21):
         CONTROL.connect((network, port))
         #CONTROL.settimeout(0)
         reply = CONTROL.recv(BUFFER_SIZE)
-        log(reply)
+        log(reply[:-2])
         return CONTROL
     except socket_error as e:
         print("An unexpected error occured during connection establishment")
@@ -58,7 +61,7 @@ def establish_control_connection(network, port = 21):
 """
 Converts the FTP format (h1,h2,h3,h4,p1,p2) into a socket address
 Input:
-    str headers : A string in the format (h1,h2,h3,h4,p1,p2)
+    str headers : A string in the format h1,h2,h3,h4,p1,p2
 OutputL
     tuple : (IP_ADDR, PORT_NUM)
 """
@@ -371,6 +374,11 @@ LOG_FILE = args['LOG_FILE']
 TARGET_PORT = args['PORT_NUM']
 VERBOSE = args['verbose']
 
+
+#
+#   Esablish control connection and run the client
+#
+
 CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 #CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
 if not CONTROL_SOCKET:
@@ -434,21 +442,3 @@ while(True):
     about   cd      eprt    epsv
     get     help    ls      pasv
     port    put     pwd     quit\n""")
-    
-
-"""
-ftp_help()
-
-resp = ftp_pasv()
-if resp[0] == '227':
-    address = re.search('\(.*\)', resp[1])
-    address = address.group(0)[1:-1]
-    x = get_socket_address(address)
-    DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
-    DATA_SOCKET.connect(x)
-ftp_list()
-
-print(listen(DATA_SOCKET))
-
-print(listen(CONTROL_SOCKET))
-"""
