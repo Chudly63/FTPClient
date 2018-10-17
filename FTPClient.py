@@ -1,14 +1,27 @@
+#
+# CS472 - Homework #2
+# Alex M Brown
+# FTPClient.py
+#
+# This module contains all the functions for sending the commands for the FTP client
 
 from socket import *
 from socket import error as socket_error
 import errno
+import argparse
+import sys
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None
 DATA_SOCKET = None
+TARGET_ADDR = None
+TARGET_PORT = None
+LOG_FILE = None
 
 verbose = True
 CRLF = "\r\n"
+
+
 
 
 def log(msg):
@@ -26,9 +39,10 @@ Output:
 """
 def establish_control_connection(network, port = 21):
     CONTROL = socket(AF_INET, SOCK_STREAM)
-    CONTROL.settimeout(5)
     try:
+        CONTROL.settimeout(5)
         CONTROL.connect((network, port))
+        CONTROL.settimeout(0)
         reply = CONTROL.recv(1024)
         log(reply)
         return CONTROL
@@ -38,6 +52,25 @@ def establish_control_connection(network, port = 21):
         return None
 
 
+"""
+Sends an FTP command over the control connection socket
+Input:
+    str msg : a complete FTP command
+Output:
+    The reply from the server, or None if the message failed to send
+"""
+def send_command(msg):
+    global CONTROL_SOCKET
+    try:
+        if CONTROL_SOCKET:                                                             #Replace with code for establishing connection
+            CONTROL_SOCKET.send(msg)
+            reply = CONTROL_SOCKET.recv(1024)
+            log(reply)
+            return reply
+        return None
+    except socket_error as e:
+        print(e)
+        return None
 
 #ACCESS CONTROL COMMANDS
 
@@ -54,16 +87,10 @@ Output:
 
 """
 def ftp_user(username):
-    global CONTROL_SOCKET
-
     msg = "USER " + username + CRLF
-    
     log(msg)
     
-    CONTROL_SOCKET.send(msg)
-    reply = CONTROL_SOCKET.recv(1024)
-    
-    log(reply)
+    reply = send_command(msg)
 
     return reply
 
@@ -81,17 +108,10 @@ Output:
 
 """
 def ftp_pass(password):
-    global CONTROL_SOCKET
-
     msg = "PASS "+password+CRLF
-
     log(msg)
 
-    CONTROL_SOCKET.send(msg)
-
-    reply = CONTROL_SOCKET.recv(1024)
-
-    log(reply)
+    reply = send_command(msg)
     
     return reply
 
@@ -108,7 +128,12 @@ Output:
 
 """
 def ftp_cwd(pathname):
-    return 1
+    msg = "CWD "+pathname+CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply 
 
 
 """
@@ -118,7 +143,12 @@ Format: QUIT<CRLF>
 Replies: 221, 500
 """
 def ftp_quit():
-    return 1
+    msg = "QUIT" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+    
+    return reply
 
 
 #TRANSFER PARAMETER COMMANDS
@@ -130,7 +160,12 @@ Format: PASV<CRLF>
 Replies: 227, 500, 501, 421, 530
 """
 def ftp_pasv():
-    return 1
+    msg = "PASV" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -180,7 +215,12 @@ Format: RETR<sp><pathname><CRLF>
 Replies: 125, 150, 110, 226, 250, 425, 426, 451, 450, 550, 500, 501, 421, 530
 """
 def ftp_retr(pathname):
-    return 1
+    msg = "RETR "+pathname+CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -191,7 +231,12 @@ Format: STOR<sp><pathname><CRLF>
 Replies: 125, 150, 110, 226, 250, 425, 426, 451, 551, 552, 532, 450, 452, 553, 500, 501, 421, 530
 """
 def ftp_stor(pathname):
-    return 1
+    msg = "STOR "+pathname+CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -200,7 +245,12 @@ Format: PWD<CRLF>
 Replies: 257, 500, 501, 502, 421, 550
 """
 def ftp_pwd():
-    return 1
+    msg = "PWD" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -214,7 +264,15 @@ Format: LIST[<sp><pathname>]<CRLF>
 Replies: 125, 150, 226, 250, 425, 426, 451, 450, 500, 501, 502, 421, 530
 """
 def ftp_list(pathname = None):
-    return 1
+    if pathname:
+        msg = "LIST " + pathname + CRLF
+    else:
+        msg = "LIST" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -224,7 +282,12 @@ Format: SYST<CRLF>
 Replies: 215, 500, 501, 502, 421
 """
 def ftp_syst():
-    return 1
+    msg = "SYST" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
 
 
 """
@@ -237,9 +300,34 @@ Format: HELP[<sp><string>]<CRLF>
 Replies: 221, 214, 500, 501, 502, 421
 """
 def ftp_help(argument = None):
-    return 1
+    if argument:
+        msg = "HELP " + argument + CRLF
+    else:
+        msg = "HELP" + CRLF
+    log(msg)
+
+    reply = send_command(msg)
+
+    return reply
+
+
+# 
+#   Read command line arguments. 
+#
+
+parser = argparse.ArgumentParser(description = "FTP client written by Alex M Brown.", epilog = "Have a nice day <3")
+parser.add_argument('IP_ADDR', help="The IP Address or Name of the FTP server")
+parser.add_argument('LOG_FILE', help="The name of the file for the client logs")
+parser.add_argument('PORT_NUM', nargs='?', default = 21, type = int, help="The port number of the FTP server. [Default = 21]")
+args = vars(parser.parse_args(sys.argv[1:]))
+
+TARGET_ADDR = args['IP_ADDR']
+LOG_FILE = args['LOG_FILE']
+TARGET_PORT = args['PORT_NUM']
+
 
 CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
+#CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
 if not CONTROL_SOCKET:
     exit()
 ftp_user("cs472")
