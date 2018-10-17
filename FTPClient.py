@@ -21,14 +21,14 @@ TARGET_PORT = None
 LOG_FILE = None
 BUFFER_SIZE = 4000
 
-verbose = False
+VERBOSE = True
 CRLF = "\r\n"
 
 
 
 
 def log(msg):
-    if verbose:
+    if VERBOSE:
         print(msg)
 
 """
@@ -77,11 +77,12 @@ Output:
 """
 def send_command(msg):
     global CONTROL_SOCKET
-    try:
+    log("Sending: " + msg[:-2])
+    try:    
         if CONTROL_SOCKET:                                                             #Replace with code for establishing connection
             CONTROL_SOCKET.send(msg)
             reply = CONTROL_SOCKET.recv(BUFFER_SIZE)
-            log(reply)
+            log("Received: " + reply[:-2])
             return reply
         return None
     except socket_error as e:
@@ -101,7 +102,7 @@ def parse_response(reply):
         return None
 
     code = reply[0:3]
-    text = reply[4:-3]
+    text = reply[4:-2]
     return (code,text)
 
 
@@ -125,7 +126,6 @@ Output:
 """
 def ftp_user(username):
     msg = "USER " + username + CRLF
-    log(msg)
     
     reply = parse_response(send_command(msg))
 
@@ -146,7 +146,6 @@ Output:
 """
 def ftp_pass(password):
     msg = "PASS "+password+CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
     
@@ -166,7 +165,6 @@ Output:
 """
 def ftp_cwd(pathname):
     msg = "CWD "+pathname+CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -181,7 +179,6 @@ Replies: 221, 500
 """
 def ftp_quit():
     msg = "QUIT" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
     
@@ -199,7 +196,6 @@ Socket Address from server in the format h1,h2,h3,h4,p1,p2 where the ip address 
 """
 def ftp_pasv():
     msg = "PASV" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -254,7 +250,6 @@ Replies: 125, 150, 110, 226, 250, 425, 426, 451, 450, 550, 500, 501, 421, 530
 """
 def ftp_retr(pathname):
     msg = "RETR "+pathname+CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -270,7 +265,6 @@ Replies: 125, 150, 110, 226, 250, 425, 426, 451, 551, 552, 532, 450, 452, 553, 5
 """
 def ftp_stor(pathname):
     msg = "STOR "+pathname+CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -284,7 +278,6 @@ Replies: 257, 500, 501, 502, 421, 550
 """
 def ftp_pwd():
     msg = "PWD" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -306,7 +299,6 @@ def ftp_list(pathname = None):
         msg = "LIST " + pathname + CRLF
     else:
         msg = "LIST" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -321,7 +313,6 @@ Replies: 215, 500, 501, 502, 421
 """
 def ftp_syst():
     msg = "SYST" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -342,7 +333,6 @@ def ftp_help(argument = None):
         msg = "HELP " + argument + CRLF
     else:
         msg = "HELP" + CRLF
-    log(msg)
 
     reply = parse_response(send_command(msg))
 
@@ -363,20 +353,23 @@ def ftp_login():
     print(resp[1])
     return False
 
+
+
 # 
 #   Read command line arguments. 
 #
 
 parser = argparse.ArgumentParser(description = "FTP client written by Alex M Brown.", epilog = "Have a nice day <3")
-parser.add_argument('IP_ADDR', help="The IP Address or Name of the FTP server")
-parser.add_argument('LOG_FILE', help="The name of the file for the client logs")
+parser.add_argument('-v','--verbose', action='store_true', help="Print notes to cmdline. Useful for debugging")
+parser.add_argument('IP_ADDR', nargs='?', default = '10.246.251.93', help="The IP Address or Name of the FTP server")
+parser.add_argument('LOG_FILE', nargs='?', default = 'myLog.txt', help="The name of the file for the client logs")
 parser.add_argument('PORT_NUM', nargs='?', default = 21, type = int, help="The port number of the FTP server. [Default = 21]")
 args = vars(parser.parse_args(sys.argv[1:]))
 
 TARGET_ADDR = args['IP_ADDR']
 LOG_FILE = args['LOG_FILE']
 TARGET_PORT = args['PORT_NUM']
-
+VERBOSE = args['verbose']
 
 CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 #CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
@@ -387,35 +380,60 @@ if not ftp_login():
     exit()
 
 while(True):
-    print("""\n\nSelect Command
-    1. Help
-    2. Print Directory
-    3. List Directory
-    4. Change Directory
-    5. Retrieve File
-    6. Store File
-    7. Show System Information
-    8. Quit
-    """)
-    choice = raw_input("Enter Selection: ")
-    if choice == '1':
+    choice = raw_input("myFTP> ")
+    if choice == 'help':
         print("Do Help")
-    elif choice == '2':
-        print("Do PWD")
-    elif choice == '3':
+
+    elif choice == 'pasv':
+        print("Entering passive mode...")
+        resp = ftp_pasv()
+        if resp[0] == '227':
+            address = re.search('\(.*\)', resp[1])
+            address = address.group(0)[1:-1]
+            socket_address = get_socket_address(address)
+            DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+            DATA_SOCKET.connect(socket_address)
+            print("Data connection ready.")
+            
+
+    elif choice == 'port':
+        print("Do PORT")
+
+    elif choice == 'epsv':
+        print("Do EPSV")
+
+    elif choice == 'eprt':
+        print("Do EPRT")
+
+    elif choice == 'pwd':
+        resp = ftp_pwd()
+        print(resp[1])
+
+    elif choice == 'ls':
         print("Do LIST")
-    elif choice == '4':
+
+    elif choice == 'cd':
         print("Do CWD")
-    elif choice == '5':
+
+    elif choice == 'get':
         print("Do RETR")
-    elif choice == '6':
+
+    elif choice == 'put':
         print("Do STOR")
-    elif choice == '7':
+
+    elif choice == 'about':
         resp = ftp_syst()
         print(resp[1])
-    elif choice == '8':
+
+    elif choice == 'quit':
         ftp_quit()
         exit()
+
+    else:
+        print("""\nSupported Commands:
+    about   cd      eprt    epsv
+    get     help    ls      pasv
+    port    put     pwd     quit\n""")
     
 
 """
