@@ -332,3 +332,7 @@ if not CONTROL_SOCKET:
     exit()
 ftp_user("cs472")
 ftp_pass("hw2ftp")
+ftp_pasv()
+ftp_pwd()
+ftp_syst()
+ftp_quit()
