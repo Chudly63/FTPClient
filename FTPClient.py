@@ -481,7 +481,9 @@ while(True):
                 print(resp[1])
 
     elif choice == 'cd':
-        print("Do CWD")
+        directory = raw_input("Enter directory name: ")
+        resp = ftp_cwd(directory)
+        print(resp[1])
 
     elif choice == 'get':
         if not DATA_SOCKET:
