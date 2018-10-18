@@ -27,13 +27,20 @@ CRLF = "\r\n"
 
 
 
-
+"""
+Used for logging commands/replies/other important notes
+Logs a written to a log file. If the -v flag was set, they are also written to stdout.
+Input:
+    msg: The message to be logged
+"""
 def log(msg):
     logfile = open(LOG_FILE,'a+')
-    logfile.write(str(datetime.datetime.now()) + ": "+msg + "\n")
+    logfile.write(str(datetime.datetime.now())[:-3] + ": "+msg + "\n")
     logfile.close()
     if VERBOSE:
-        print(msg)
+        print("#LOG: " + msg)
+
+
 
 """
 Establishes the control connection between the client and the server
@@ -59,6 +66,7 @@ def establish_control_connection(network, port = 21):
         return None
 
 
+
 """
 Converts the FTP format (h1,h2,h3,h4,p1,p2) into a socket address
 Input:
@@ -72,6 +80,8 @@ def get_socket_address(headers):
     DEST_PORT = int(address_fields[4]) * 256 + int(address_fields[5])
     return (DEST_IP,DEST_PORT)
 
+
+
 """
 Sends an FTP command over the control connection socket
 Input:
@@ -81,7 +91,7 @@ Output:
 """
 def send_command(msg):
     global CONTROL_SOCKET
-    log("Sending: " + msg[:-2])
+    log("Sent: " + msg[:-2])
     try:    
         if CONTROL_SOCKET:                                                             #Replace with code for establishing connection
             CONTROL_SOCKET.send(msg)
@@ -115,21 +125,27 @@ def listen(socket):
     log("Received: " + response[:-2])
     return response
 
-
-def readFile(socket, filename):
+"""
+Used for receiving information from the data connection. 
+"""
+def recvall(socket):
+    log("Reading info from the data connection...")
     blankCount = 0
-    newFile = open(filename, "w+")
+    data = b""
     while(True):
-        print("Writing data...")
-        data = socket.recv(BUFFER_SIZE)
-        if len(data) == 0:
+        resp = socket.recv(BUFFER_SIZE)
+        if len(resp) == 0:
             blankCount += 1
         else:
-            newFile.write(data)
+            data += resp
             blankCount = 0
-        if blankCount > 3:                  #Stream was empty for the last three reads (Assume server is done sending)
-            break
-        
+        if blankCount > 3:
+            return data
+
+
+def readFile(socket, filename):
+    newFile = open(filename, "w+")
+    newFile.write(recvall(socket))
     newFile.close()
 
 
@@ -475,8 +491,9 @@ while(True):
             resp = ftp_retr(filename)
             if resp[0] == '150' or resp[0] == '125':
                 readFile(DATA_SOCKET, filename)
-                resp2 = listen(CONTROL_SOCKET)
-                print("From control: " + resp2)
+                resp2 = parse_response(listen(CONTROL_SOCKET))
+                if not resp2[0] == '226':
+                    print("Why?" + resp2[0])
             else:
                 print(resp[1])
 
