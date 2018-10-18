@@ -13,6 +13,7 @@ import sys
 import re
 import getpass
 import datetime
+import time
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None
@@ -110,7 +111,26 @@ def parse_response(reply):
 
 
 def listen(socket):
-    return socket.recv(BUFFER_SIZE)
+    response = socket.recv(BUFFER_SIZE)
+    log("Received: " + response[:-2])
+    return response
+
+
+def readFile(socket, filename):
+    blankCount = 0
+    newFile = open(filename, "w+")
+    while(True):
+        print("Writing data...")
+        data = socket.recv(BUFFER_SIZE)
+        if len(data) == 0:
+            blankCount += 1
+        else:
+            newFile.write(data)
+            blankCount = 0
+        if blankCount > 3:                  #Stream was empty for the last three reads (Assume server is done sending)
+            break
+        
+    newFile.close()
 
 
 #ACCESS CONTROL COMMANDS
@@ -386,6 +406,9 @@ except socket_error as e:
 #
 
 #CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
+
+log("----New Session----")
+log("Creating Control Connection at Socket Address: ('" + TARGET_ADDR + "', " + str(TARGET_PORT) + ")")
 CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
 if not CONTROL_SOCKET:
     exit()
@@ -405,6 +428,7 @@ while(True):
             address = re.search('\(.*\)', resp[1])
             address = address.group(0)[1:-1]
             socket_address = get_socket_address(address)
+            log("Creating Data Connection at Socket Address: " + str(socket_address))
             DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
             DATA_SOCKET.connect(socket_address)
             print("Data connection ready.")
@@ -424,13 +448,37 @@ while(True):
         print(resp[1])
 
     elif choice == 'ls':
-        print("Do LIST")
+        """
+        How does it work?
+        Send LIST request. If you get the "sending data" response, read from Data connection.
+        """
+        if not DATA_SOCKET:
+            print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
+        else:
+            resp = ftp_list()
+            if resp[0] == '150':
+                list_info = listen(DATA_SOCKET)
+                print(list_info)
+                resp = listen(CONTROL_SOCKET)
+                print(resp)
+            else:
+                print(resp[1])
 
     elif choice == 'cd':
         print("Do CWD")
 
     elif choice == 'get':
-        print("Do RETR")
+        if not DATA_SOCKET:
+            print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
+        else:
+            filename = raw_input("Enter name of desired file: ")
+            resp = ftp_retr(filename)
+            if resp[0] == '150' or resp[0] == '125':
+                readFile(DATA_SOCKET, filename)
+                resp2 = listen(CONTROL_SOCKET)
+                print("From control: " + resp2)
+            else:
+                print(resp[1])
 
     elif choice == 'put':
         print("Do STOR")
