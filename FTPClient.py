@@ -374,13 +374,19 @@ LOG_FILE = args['LOG_FILE']
 TARGET_PORT = args['PORT_NUM']
 VERBOSE = args['verbose']
 
+try:
+    TARGET_ADDR = gethostbyname(TARGET_ADDR)
+except socket_error as e:
+    print("An unexpected error occured while looking up host.")
+    print(e)
+    exit()
 
 #
 #   Esablish control connection and run the client
 #
 
-CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
-#CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
+#CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
+CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
 if not CONTROL_SOCKET:
     exit()
 
