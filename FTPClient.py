@@ -143,6 +143,17 @@ def recvall(socket):
         if blankCount > 3:
             return data
 
+def sendFile(socket, filename):
+    sendFile = open(filename, "r+")
+    sendBuffer = sendFile.read(BUFFER_SIZE)
+    while not sendBuffer == "":
+        print("Sending data...")
+        socket.send(sendBuffer)
+        sendBuffer = sendFile.read(BUFFER_SIZE)
+    sendFile.close()
+    socket.close()
+    print("Done")
+
 
 def readFile(socket, filename):
     newFile = open(filename, "w+")
@@ -508,6 +519,8 @@ while(True):
             filename = raw_input("Enter name of your file: ")
             resp = ftp_stor(filename)
             print(resp)
+            sendFile(DATA_SOCKET, filename)
+            resp = listen(CONTROL_SOCKET)
 
     elif choice == 'about':
         resp = ftp_syst()
