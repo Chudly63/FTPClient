@@ -136,7 +136,7 @@ def recvall(socket):
         resp = socket.recv(BUFFER_SIZE)
         if len(resp) == 0:
             blankCount += 1
-            time.sleep(1)
+            time.sleep(.1)
         else:
             data += resp
             blankCount = 0
@@ -485,10 +485,12 @@ while(True):
         else:
             resp = ftp_list()
             if resp[0] == '150':
-                list_info = listen(DATA_SOCKET)
+                list_info = recvall(DATA_SOCKET)
                 print(list_info)
-                resp = listen(CONTROL_SOCKET)
-                print(resp)
+                resp = parse_response(listen(CONTROL_SOCKET))
+                if not resp[0] == '226':
+                    print(resp[1])
+                    DATA_SOCKET.close()
             else:
                 print(resp[1])
 
@@ -507,7 +509,8 @@ while(True):
                 readFile(DATA_SOCKET, filename)
                 resp2 = parse_response(listen(CONTROL_SOCKET))
                 if not resp2[0] == '226':
-                    print("Why?" + resp2[0])
+                    print(resp2[1])
+                    DATA_SOCKET.close()
             else:
                 print(resp[1])
 
@@ -520,7 +523,10 @@ while(True):
             resp = ftp_stor(filename)
             print(resp)
             sendFile(DATA_SOCKET, filename)
-            resp = listen(CONTROL_SOCKET)
+            resp = parse_response(listen(CONTROL_SOCKET))
+            if not resp[0] == '226':
+                print(resp[1])
+                DATA_SOCKET.close()
 
     elif choice == 'about':
         resp = ftp_syst()
