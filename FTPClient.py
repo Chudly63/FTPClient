@@ -24,7 +24,10 @@ LOG_FILE = None
 BUFFER_SIZE = 4000
 VERBOSE = False
 CRLF = "\r\n"
-
+SUPPORTED_COMMANDS = """\nSupported Commands:
+    about   cd      eprt    epsv
+    get     help    ls      pasv
+    port    put     pwd     quit\n"""
 
 
 """
@@ -40,10 +43,26 @@ def log(msg):
     if VERBOSE:
         print("#LOG: " + msg)
 
-
+"""
+Used for receiving information from the data connection. 
+"""
+def recvall(socket):
+    log("Reading info from the data connection...")
+    blankCount = 0
+    data = b""
+    while(True):
+        resp = socket.recv(BUFFER_SIZE)
+        if len(resp) == 0:
+            blankCount += 1
+            time.sleep(.1)
+        else:
+            data += resp
+            blankCount = 0
+        if blankCount > 3:
+            return data
 
 """
-Establishes the control connection between the client and the server
+Establishes a connection between the client and the server
 Input:
     str network : The network address of the server
     int port    : The port number of the server (default 21)
@@ -51,15 +70,13 @@ Output:
     On success, returns the socket for the control connection
     On fail, returns None
 """
-def establish_control_connection(network, port = 21):
-    CONTROL = socket(AF_INET, SOCK_STREAM)
+def establish_connection(network, port = 21):
+    CONNECTION = socket(AF_INET, SOCK_STREAM)
+    log("Establishing connection at " + str((network, port)))
     try:
-        CONTROL.settimeout(5)
-        CONTROL.connect((network, port))
-        #CONTROL.settimeout(0)
-        reply = CONTROL.recv(BUFFER_SIZE)
-        log(reply[:-2])
-        return CONTROL
+        CONNECTION.settimeout(5)
+        CONNECTION.connect((network, port))
+        return CONNECTION
     except socket_error as e:
         print("An unexpected error occured during connection establishment")
         print(e)
@@ -120,28 +137,12 @@ def parse_response(reply):
     return (code,text)
 
 
-def listen(socket):
+def readSocket(socket):
     response = socket.recv(BUFFER_SIZE)
     log("Received: " + response[:-2])
     return response
 
-"""
-Used for receiving information from the data connection. 
-"""
-def recvall(socket):
-    log("Reading info from the data connection...")
-    blankCount = 0
-    data = b""
-    while(True):
-        resp = socket.recv(BUFFER_SIZE)
-        if len(resp) == 0:
-            blankCount += 1
-            time.sleep(.1)
-        else:
-            data += resp
-            blankCount = 0
-        if blankCount > 3:
-            return data
+
 
 def sendFile(socket, filename):
     sendFile = open(filename, "r+")
@@ -260,8 +261,32 @@ Format: POST<sp><host-port><CRLF>
     Where: <host-port> := <h1><h2><h3><h4><p1><p2>
 Replies: 200, 500, 501, 421, 530
 """
-def ftp_port(address):
-    return 1
+def ftp_port():
+    global DATA_SOCKET
+
+    my_ip = CONTROL_SOCKET.getsockname()[0]
+
+    DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+    DATA_SOCKET.bind((my_ip, 0))
+
+    my_port = int(DATA_SOCKET.getsockname()[1])
+    p2 = my_port % 256
+    p1 = (my_port - p2) / 256
+
+    h = ','.join(my_ip.split('.'))
+    headers = h + ',' + str(p1) + ',' + str(p2)
+
+    print("Begin listen")
+    DATA_SOCKET.listen(1)
+    
+    print("Send message")
+    msg = "PORT " + headers + CRLF
+
+    reply = parse_response(send_command(msg))
+    print(reply)
+
+
+    return reply
 
 
 """
@@ -437,47 +462,65 @@ except socket_error as e:
 #   Esablish control connection and run the client
 #
 
-#CONTROL_SOCKET = establish_control_connection("10.246.251.93", 21)
 
-log("----New Session----")
-log("Creating Control Connection at Socket Address: ('" + TARGET_ADDR + "', " + str(TARGET_PORT) + ")")
-CONTROL_SOCKET = establish_control_connection(TARGET_ADDR, TARGET_PORT)
+log("-----------------------------------New Session-----------------------------------")
+CONTROL_SOCKET = establish_connection(TARGET_ADDR, TARGET_PORT)
+
 if not CONTROL_SOCKET:
+    print("Failed to establish control connection")
     exit()
 
+readSocket(CONTROL_SOCKET)
+
+#Log the user in
 if not ftp_login():
     exit()
 
+#Begin UI
+print("Welcome to Alex Brown's FTP Client!")
+print(SUPPORTED_COMMANDS)
 while(True):
     choice = raw_input("myFTP> ")
+
     if choice == 'help':
-        print("Do Help")
+        print("Do HELP")
 
     elif choice == 'pasv':
         print("Entering passive mode...")
         resp = ftp_pasv()
         if resp[0] == '227':
+            #Search the response string for the socket headers: (h1,h2,h3,h4,p1,p2).
             address = re.search('\(.*\)', resp[1])
             address = address.group(0)[1:-1]
+            #Parse the socket address and establish the data connection.
             socket_address = get_socket_address(address)
-            log("Creating Data Connection at Socket Address: " + str(socket_address))
-            DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
-            DATA_SOCKET.connect(socket_address)
-            print("Data connection ready.")
+            DATA_SOCKET = establish_connection(socket_address[0], socket_address[1])
+            if DATA_SOCKET:
+                print("Data connection ready.")
+            else:
+                print("Error establishing data connection")
             
 
     elif choice == 'port':
-        print("Do PORT")
+        print("Entering active mode...")
+        resp = ftp_port()
+        print(resp)
 
     elif choice == 'epsv':
         print("Entering passive mode...")
         resp = ftp_epsv()
         if resp[0] == '229':
+
+            #Search the response string for the port number
             port = re.search('\|\|\|.*\|', resp[1])
             port = port.group(0)[1:-1].strip('|')
-            DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
-            DATA_SOCKET.connect((TARGET_ADDR, int(port)))
-            print(port)
+
+            #Establish the data connection
+            DATA_SOCKET = establish_connection(TARGET_ADDR, int(port))
+            if DATA_SOCKET:
+                print("Data connection ready.")
+            else:
+                print("Error establishing data connection")
 
     elif choice == 'eprt':
         print("Do EPRT")
@@ -487,18 +530,15 @@ while(True):
         print(resp[1])
 
     elif choice == 'ls':
-        """
-        How does it work?
-        Send LIST request. If you get the "sending data" response, read from Data connection.
-        """
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
         else:
-            resp = ftp_list()
+            subject = raw_input("Enter optional file/directory: ")
+            resp = ftp_list(subject)
             if resp[0] == '150':
                 list_info = recvall(DATA_SOCKET)
                 print(list_info)
-                resp = parse_response(listen(CONTROL_SOCKET))
+                resp = parse_response(readSocket(CONTROL_SOCKET))
                 if not resp[0] == '226':
                     print(resp[1])
                     DATA_SOCKET.close()
@@ -517,8 +557,9 @@ while(True):
             filename = raw_input("Enter name of desired file: ")
             resp = ftp_retr(filename)
             if resp[0] == '150' or resp[0] == '125':
-                readFile(DATA_SOCKET, filename)
-                resp2 = parse_response(listen(CONTROL_SOCKET))
+                savename = raw_input("Save file as: ")
+                readFile(DATA_SOCKET, savename)
+                resp2 = parse_response(readSocket(CONTROL_SOCKET))
                 if not resp2[0] == '226':
                     print(resp2[1])
                     DATA_SOCKET.close()
@@ -533,7 +574,7 @@ while(True):
             resp = ftp_stor(filename)
             if resp[0] == '150' or resp[0] == '125':
                 sendFile(DATA_SOCKET, filename)
-                resp = parse_response(listen(CONTROL_SOCKET))
+                resp = parse_response(readSocket(CONTROL_SOCKET))
                 if not resp[0] == '226':
                     print(resp[1])
                     DATA_SOCKET.close()
@@ -549,7 +590,4 @@ while(True):
         exit()
 
     else:
-        print("""\nSupported Commands:
-    about   cd      eprt    epsv
-    get     help    ls      pasv
-    port    put     pwd     quit\n""")
+        print(SUPPORTED_COMMANDS)
