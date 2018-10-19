@@ -271,7 +271,11 @@ Format: EPSV<sp><network protocol>
 Replies: TBD
 """
 def ftp_epsv():
-    return 1
+    msg = "EPSV 1" + CRLF
+
+    reply = parse_response(send_command(msg))
+
+    return reply
 
 
 """
@@ -466,7 +470,14 @@ while(True):
         print("Do PORT")
 
     elif choice == 'epsv':
-        print("Do EPSV")
+        print("Entering passive mode...")
+        resp = ftp_epsv()
+        if resp[0] == '229':
+            port = re.search('\|\|\|.*\|', resp[1])
+            port = port.group(0)[1:-1].strip('|')
+            DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+            DATA_SOCKET.connect((TARGET_ADDR, int(port)))
+            print(port)
 
     elif choice == 'eprt':
         print("Do EPRT")
@@ -518,15 +529,16 @@ while(True):
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
         else:
-            print("Do STOR")
             filename = raw_input("Enter name of your file: ")
             resp = ftp_stor(filename)
-            print(resp)
-            sendFile(DATA_SOCKET, filename)
-            resp = parse_response(listen(CONTROL_SOCKET))
-            if not resp[0] == '226':
+            if resp[0] == '150' or resp[0] == '125':
+                sendFile(DATA_SOCKET, filename)
+                resp = parse_response(listen(CONTROL_SOCKET))
+                if not resp[0] == '226':
+                    print(resp[1])
+                    DATA_SOCKET.close()
+            else:
                 print(resp[1])
-                DATA_SOCKET.close()
 
     elif choice == 'about':
         resp = ftp_syst()
