@@ -136,6 +136,7 @@ def recvall(socket):
         resp = socket.recv(BUFFER_SIZE)
         if len(resp) == 0:
             blankCount += 1
+            time.sleep(1)
         else:
             data += resp
             blankCount = 0
@@ -500,7 +501,13 @@ while(True):
                 print(resp[1])
 
     elif choice == 'put':
-        print("Do STOR")
+        if not DATA_SOCKET:
+            print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
+        else:
+            print("Do STOR")
+            filename = raw_input("Enter name of your file: ")
+            resp = ftp_stor(filename)
+            print(resp)
 
     elif choice == 'about':
         resp = ftp_syst()
