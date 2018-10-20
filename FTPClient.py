@@ -28,6 +28,7 @@ SUPPORTED_COMMANDS = """\nSupported Commands:
     about   cd      eprt    epsv
     get     help    ls      pasv
     port    put     pwd     quit\n"""
+ACTIVE_MODE = False
 
 
 """
@@ -42,6 +43,17 @@ def log(msg):
     logfile.close()
     if VERBOSE:
         print("#LOG: " + msg)
+
+
+def terminate(msg):
+    log("FATAL ERROR: " + msg)
+    print("A fatal error has occured: " + msg)
+    if CONTROL_SOCKET:
+        CONTROL_SOCKET.close()
+    if DATA_SOCKET:
+        DATA_SOCKET.close()
+    exit()
+    
 
 """
 Used for receiving information from the data connection. 
@@ -115,10 +127,10 @@ def send_command(msg):
             reply = CONTROL_SOCKET.recv(BUFFER_SIZE)
             log("Received: " + reply[:-2])
             return reply
-        return None
+        terminate("No Control Connection")
     except socket_error as e:
         print(e)
-        return None
+        terminate("Control connection lost.")
 
 
 """
@@ -261,30 +273,12 @@ Format: POST<sp><host-port><CRLF>
     Where: <host-port> := <h1><h2><h3><h4><p1><p2>
 Replies: 200, 500, 501, 421, 530
 """
-def ftp_port():
+def ftp_port(headers):
     global DATA_SOCKET
-
-    my_ip = CONTROL_SOCKET.getsockname()[0]
-
-    DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
-    DATA_SOCKET.bind((my_ip, 0))
-
-    my_port = int(DATA_SOCKET.getsockname()[1])
-    p2 = my_port % 256
-    p1 = (my_port - p2) / 256
-
-    h = ','.join(my_ip.split('.'))
-    headers = h + ',' + str(p1) + ',' + str(p2)
-
-    print("Begin listen")
-    DATA_SOCKET.listen(1)
     
-    print("Send message")
     msg = "PORT " + headers + CRLF
 
     reply = parse_response(send_command(msg))
-    print(reply)
-
 
     return reply
 
@@ -314,8 +308,12 @@ Format: EPRT<sp><d><network protocol><d><network address><d><TCP Port><d>
     Example: EPRT |1|132.253.1.2|6275|
 Replies: TBD
 """
-def ftp_eprt():
-    return 1
+def ftp_eprt(protocol, address, port):
+    msg = "EPRT |"+str(protocol)+"|"+str(address)+"|"+str(port)+"|" + CRLF
+
+    reply = parse_response(send_command(msg))
+
+    return reply
 
 
 #SERVICE COMMANDS
@@ -496,15 +494,41 @@ while(True):
             socket_address = get_socket_address(address)
             DATA_SOCKET = establish_connection(socket_address[0], socket_address[1])
             if DATA_SOCKET:
+                ACTIVE_MODE = False
                 print("Data connection ready.")
             else:
                 print("Error establishing data connection")
+        else:
+            print(resp[0])
             
 
     elif choice == 'port':
         print("Entering active mode...")
-        resp = ftp_port()
-        print(resp)
+        #Get the IP Address of the machine and open a port on it
+        my_ip = CONTROL_SOCKET.getsockname()[0]
+
+        DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+        DATA_SOCKET.bind((my_ip, 0))
+
+        #Generate the headers for the PORT command (h1,h2,h3,h4,p1,p2)
+        my_port = int(DATA_SOCKET.getsockname()[1])
+        p2 = my_port % 256
+        p1 = (my_port - p2) / 256
+
+        h = ','.join(my_ip.split('.'))
+        headers = h + ',' + str(p1) + ',' + str(p2)
+
+        #Begin listening on the newly opened port and send the PORT command
+        DATA_SOCKET.listen(1)
+        resp = ftp_port(headers)
+
+        if resp[0] == '200':
+            ACTIVE_MODE = True
+            print("Data connection port ready.")
+        else:
+            DATA_SOCKET.close()
+            print(resp[1])
+
 
     elif choice == 'epsv':
         print("Entering passive mode...")
@@ -518,12 +542,27 @@ while(True):
             #Establish the data connection
             DATA_SOCKET = establish_connection(TARGET_ADDR, int(port))
             if DATA_SOCKET:
+                ACTIVE_MODE = False
                 print("Data connection ready.")
             else:
                 print("Error establishing data connection")
 
     elif choice == 'eprt':
-        print("Do EPRT")
+        my_ip = CONTROL_SOCKET.getsockname()[0]
+
+        DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
+        DATA_SOCKET.bind((my_ip, 0))
+
+        my_port = DATA_SOCKET.getsockname()[1]
+
+        DATA_SOCKET.listen(1)
+        resp = ftp_eprt(1, my_ip, my_port)
+        if resp[0] == '200':
+            ACTIVE_MODE = True
+            print("Data connection port ready.")
+        else:
+            DATA_SOCKET.close()
+            print(resp[1])
 
     elif choice == 'pwd':
         resp = ftp_pwd()
@@ -536,6 +575,9 @@ while(True):
             subject = raw_input("Enter optional file/directory: ")
             resp = ftp_list(subject)
             if resp[0] == '150':
+                if ACTIVE_MODE:
+                    DATA_SOCKET, address = DATA_SOCKET.accept()
+                    log("Accepted data connection from Server")
                 list_info = recvall(DATA_SOCKET)
                 print(list_info)
                 resp = parse_response(readSocket(CONTROL_SOCKET))
@@ -558,6 +600,9 @@ while(True):
             resp = ftp_retr(filename)
             if resp[0] == '150' or resp[0] == '125':
                 savename = raw_input("Save file as: ")
+                if ACTIVE_MODE:
+                    DATA_SOCKET, address = DATA_SOCKET.accept()
+                    log("Accepted data connection from Server")
                 readFile(DATA_SOCKET, savename)
                 resp2 = parse_response(readSocket(CONTROL_SOCKET))
                 if not resp2[0] == '226':
@@ -573,6 +618,9 @@ while(True):
             filename = raw_input("Enter name of your file: ")
             resp = ftp_stor(filename)
             if resp[0] == '150' or resp[0] == '125':
+                if ACTIVE_MODE:
+                    DATA_SOCKET, address = DATA_SOCKET.accept()
+                    log("Accepted data connection from Server")
                 sendFile(DATA_SOCKET, filename)
                 resp = parse_response(readSocket(CONTROL_SOCKET))
                 if not resp[0] == '226':
