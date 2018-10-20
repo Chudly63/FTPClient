@@ -407,14 +407,33 @@ Format: HELP[<sp><string>]<CRLF>
 Replies: 221, 214, 500, 501, 502, 421
 """
 def ftp_help(argument = None):
-    if argument:
-        msg = "HELP " + argument + CRLF
-    else:
-        msg = "HELP" + CRLF
+    if argument == "":
+        print(SUPPORTED_COMMANDS)
+    elif argument == "about":
+        print("about:       Show system information.")
+    elif argument == "cd":
+        print("cd:          Change current working directory.")
+    elif argument == "eprt":
+        print("eprt:        Extended Port. Tells the server what port to connect to for the data connection.")
+    elif argument == "epsv":
+        print("epsv:        Extended Passive. Tells the server to open a port so the client can establish a data connection.")
+    elif argument == "get":
+        peint("get:         Get file. Tells the server to send a file to the client. Requires data connection.")
+    elif argument == "help":
+        print("help:        Show information regarding supported commands.")
+    elif argument == "ls":
+        print("ls:          List. Show the information for all files in a directory. Requires data connection.")
+    elif argument == "pasv":
+        print("pasv:        Passive. Tells the server to open a port so the client can establish a data connection.")
+    elif argument == "port":
+        print("port:        Port. Tells the server what port to connect to for the data connection.")
+    elif argument == "put":
+        print("put:         Put file. Tells the server to store a file from the client. Requires data connection.")
+    elif argument == "pwd":
+        print("pwd:         Shows the current working direcoty.")
+    elif argument == "quit":
+        print("quit:        Terminate the connection to the server and close the client.")
 
-    reply = parse_response(send_command(msg))
-
-    return reply
 
 
 def ftp_login():
@@ -481,7 +500,8 @@ while(True):
     choice = raw_input("myFTP> ")
 
     if choice == 'help':
-        print("Do HELP")
+        help_command = raw_input("Select command: ")
+        ftp_help(help_command)
 
     elif choice == 'pasv':
         print("Entering passive mode...")
