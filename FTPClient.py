@@ -15,20 +15,31 @@ import getpass
 import datetime
 import time
 
+
+"""
+Last Chance Checklist
+[ ] Finish Documentation
+[ ] Handle Filename Errors
+[ ] Organize Commands into methods
+[ ] DATA_SOCKET = None lines
+"""
+
+
+
 #GLOBAL VARIABLES
-CONTROL_SOCKET = None
-DATA_SOCKET = None
-TARGET_ADDR = None
-TARGET_PORT = None
-LOG_FILE = None
-BUFFER_SIZE = 4000
-VERBOSE = False
-CRLF = "\r\n"
-SUPPORTED_COMMANDS = """\nSupported Commands:
+CONTROL_SOCKET = None                               #Socket for Control Connection
+DATA_SOCKET = None                                  #Socket for Data Connection
+TARGET_ADDR = None                                  #IP Address of the FTP server
+TARGET_PORT = None                                  #Port Number for the Control Connection at the FTP server
+LOG_FILE = None                                     #Name of the log file
+BUFFER_SIZE = 4000                                  #Buffer for reading from FTP server
+VERBOSE = False                                     #Should the client print logging info to stdout?
+CRLF = "\r\n"                                       
+SUPPORTED_COMMANDS = """\nSupported Commands:       
     about   cd      eprt    epsv
     get     help    ls      pasv
     port    put     pwd     quit\n"""
-ACTIVE_MODE = False
+ACTIVE_MODE = False                                 #Is the server in active mode?
 
 
 """
@@ -45,6 +56,11 @@ def log(msg):
         print("#LOG: " + msg)
 
 
+"""
+Shut down the client with an error message
+Input:
+    msg: The message to be logged
+"""
 def terminate(msg):
     log("FATAL ERROR: " + msg)
     print("A fatal error has occured: " + msg)
@@ -57,6 +73,10 @@ def terminate(msg):
 
 """
 Used for receiving information from the data connection. 
+Input:
+    socket: The socket to read everything from
+Output:
+    data: All of the data read from socket
 """
 def recvall(socket):
     log("Reading info from the data connection...")
@@ -114,7 +134,7 @@ def get_socket_address(headers):
 """
 Sends an FTP command over the control connection socket
 Input:
-    str msg : a complete FTP command
+    msg : a complete FTP command
 Output:
     The reply from the server, or None if the message failed to send
 """
@@ -136,7 +156,7 @@ def send_command(msg):
 """
 Separates the response code and the response message from a server reply
 Input:
-    str reply: An FTP server message
+    reply: An FTP server message
 Output:
     tuple : (Response Code, Response Message)
 """
@@ -149,13 +169,25 @@ def parse_response(reply):
     return (code,text)
 
 
+"""
+Read a response from a socket.
+Input:
+    socket: The socket to read from
+Output:
+    response: The message read 
+"""
 def readSocket(socket):
     response = socket.recv(BUFFER_SIZE)
     log("Received: " + response[:-2])
     return response
 
 
-
+"""
+Send a file along a socket
+Input:
+    socket: The socket to transmit the data over
+    filename: The name of the file to be sent
+"""
 def sendFile(socket, filename):
     sendFile = open(filename, "r+")
     sendBuffer = sendFile.read(BUFFER_SIZE)
@@ -168,6 +200,12 @@ def sendFile(socket, filename):
     print("Done")
 
 
+"""
+Read the data for a file being send over the data connection
+Input:
+    socket: The socket for the data connection
+    filename: The name of the file to save the data under
+"""
 def readFile(socket, filename):
     newFile = open(filename, "w+")
     newFile.write(recvall(socket))
@@ -179,14 +217,11 @@ def readFile(socket, filename):
 """
 FTP USER COMMAND
 Identifies the username of the current user.
-First command run after establishing control connection.
-Format: USER<sp><username><CRLF>
-Replies: 200, 530, 500, 501, 421, 331, 332
 
 Input: 
-    str username : Username of the user to be logged in
+    username : Username of the user to be logged in
 Output:
-
+    tuple : (Response Code, Response Message)
 """
 def ftp_user(username):
     msg = "USER " + username + CRLF
@@ -199,14 +234,11 @@ def ftp_user(username):
 """
 FTP PASS COMMAND
 Identifies the user's password.
-Must be immediatley preceded by the USER command.
-Format: PASS<sp><password><CRLF>
-Replies: 230, 202, 530, 500, 501, 503, 421, 332
 
 Input:
-    str password : Password of the user to be logged in
+    password : Password of the user to be logged in
 Output:
-
+    tuple : (Response Code, Response Message)
 """
 def ftp_pass(password):
     msg = "PASS "+password+CRLF
@@ -219,13 +251,11 @@ def ftp_pass(password):
 """
 FTP CWD COMMAND
 Allows the user to work with a different directory.
-Format: CWD<sp><pathname><CRLF>
-Replies: 250, 500, 501, 502, 421, 530, 550
 
 Input:
-    str pathname : The directory to change the server to
+    pathname : The directory to change the server to
 Output:
-
+    tuple : (Respone Code, Response Message)
 """
 def ftp_cwd(pathname):
     msg = "CWD "+pathname+CRLF
@@ -238,8 +268,9 @@ def ftp_cwd(pathname):
 """
 FTP QUIT COMMAND
 Terminates user connection.
-Format: QUIT<CRLF>
-Replies: 221, 500
+
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_quit():
     msg = "QUIT" + CRLF
@@ -254,9 +285,9 @@ def ftp_quit():
 """
 FTP PASV COMMAND
 Requests the server to listen on a data port and wait for a connection.
-Format: PASV<CRLF>
-Replies: 227, 500, 501, 421, 530
-Socket Address from server in the format h1,h2,h3,h4,p1,p2 where the ip address is h1.h2.h3.h4 and the port number is p1*256 + p2
+
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_pasv():
     msg = "PASV" + CRLF
@@ -269,12 +300,13 @@ def ftp_pasv():
 """
 FTP PORT COMMAND
 Intructs the server to connect to the socket located at the host-port address
-Format: POST<sp><host-port><CRLF>
-    Where: <host-port> := <h1><h2><h3><h4><p1><p2>
-Replies: 200, 500, 501, 421, 530
+
+Input:
+    headers : The address of the socket for the server to connect to. "h1,h2,h3,h4,p1,p2"
+Output:
+    tuple : (Response Code, Response Message) 
 """
 def ftp_port(headers):
-    global DATA_SOCKET
     
     msg = "PORT " + headers + CRLF
 
@@ -286,8 +318,9 @@ def ftp_port(headers):
 """
 FTP EPSV COMMAND
 Requests the server to listen on a data port and wait for a connection
-Format: EPSV<sp><network protocol>
-Replies: TBD
+
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_epsv():
     msg = "EPSV 1" + CRLF
@@ -300,13 +333,13 @@ def ftp_epsv():
 """
 FTP EPSV COMMAND
 Allows for the specification of an extended address for the data connection
-Format: EPRT<sp><d><network protocol><d><network address><d><TCP Port><d>
-    Where: <d> := | or any other delimiter character
-           <network protocol> Indicates the protocol to be used. 1 = IPv4, 2 = IPv6
-           <network address> Protocol specific representation of a network address. (i.e. 132.235.1.2)
-           <TCP Port> String representation of the port number on which the host is listening
-    Example: EPRT |1|132.253.1.2|6275|
-Replies: TBD
+
+Input:
+    protocol : The number indicating which internet protocol to use. 1 = IPv4, 2 = IPv6.
+    address : The IP address of the socket address
+    port : The port number of the socket address
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_eprt(protocol, address, port):
     msg = "EPRT |"+str(protocol)+"|"+str(address)+"|"+str(port)+"|" + CRLF
@@ -323,8 +356,11 @@ def ftp_eprt(protocol, address, port):
 FTP RETR COMMAND
 Instructs the server to transfer a copy of the file PATHNAME to
 the host at the other end of the data connection.
-Format: RETR<sp><pathname><CRLF>
-Replies: 125, 150, 110, 226, 250, 425, 426, 451, 450, 550, 500, 501, 421, 530
+
+Input:
+    pathname : The name of the file to be sent from the server
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_retr(pathname):
     msg = "RETR "+pathname+CRLF
@@ -338,8 +374,11 @@ def ftp_retr(pathname):
 FTP STOR COMMAND
 Causes the server to accept the data transfered via the data connection 
 and store the file at the server site. 
-Format: STOR<sp><pathname><CRLF>
-Replies: 125, 150, 110, 226, 250, 425, 426, 451, 551, 552, 532, 450, 452, 553, 500, 501, 421, 530
+
+Input:
+    pathname : The name of the file to be sent to the server
+Output:
+    tuple : (Response Code, Response Message)   
 """
 def ftp_stor(pathname):
     msg = "STOR "+pathname+CRLF
@@ -350,9 +389,11 @@ def ftp_stor(pathname):
 
 
 """
+FTP PWD COMMAND
 Causes the name of the current working directory to be returned in the reply.
-Format: PWD<CRLF>
-Replies: 257, 500, 501, 502, 421, 550
+
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_pwd():
     msg = "PWD" + CRLF
@@ -363,14 +404,13 @@ def ftp_pwd():
 
 
 """
+FTP LIST COMMAND
 Causes a list to be sent from the server to the passive DTP.
-If the pathname argument specifies a directory or other group of files,
-the server should transfer a list of files in the specified directory.
-If the pathname specifies a file, then the server will send curent info
-on the file.
-A null argument implies the user's current working or default directory.
-Format: LIST[<sp><pathname>]<CRLF>
-Replies: 125, 150, 226, 250, 425, 426, 451, 450, 500, 501, 502, 421, 530
+
+Input:
+    pathname : Optional. Name of a directory or file to list information about
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_list(pathname = None):
     if pathname:
@@ -386,8 +426,9 @@ def ftp_list(pathname = None):
 """
 FTP SYST COMMAND
 Used to find out the type of operating system at the server
-Format: SYST<CRLF>
-Replies: 215, 500, 501, 502, 421
+
+Output:
+    tuple : (Response Code, Response Message)
 """
 def ftp_syst():
     msg = "SYST" + CRLF
@@ -399,12 +440,12 @@ def ftp_syst():
 
 """
 FTP HELP COMMAND
-Causes the server to send helpful information regarding its implementation
-status over the control connection.
-The command may take any command name as an argument and return more specific
-information as a response.
-Format: HELP[<sp><string>]<CRLF>
-Replies: 221, 214, 500, 501, 502, 421
+Gives the user information regarding the FTP client
+
+Input:
+    argument : Optional. Client argument that requires additional information
+Output:
+    Information about the client
 """
 def ftp_help(argument = None):
     if argument == "":
@@ -436,6 +477,13 @@ def ftp_help(argument = None):
 
 
 
+"""
+Logs the user into the FTP server.
+
+Output:
+    TRUE if the user is successfully logged in
+    FALSE otherwise
+"""
 def ftp_login():
     user = raw_input('Enter Username: ')
     resp = ftp_user(user)
@@ -487,6 +535,7 @@ if not CONTROL_SOCKET:
     print("Failed to establish control connection")
     exit()
 
+
 readSocket(CONTROL_SOCKET)
 
 #Log the user in
@@ -499,10 +548,12 @@ print(SUPPORTED_COMMANDS)
 while(True):
     choice = raw_input("myFTP> ")
 
+    #DO HELP
     if choice == 'help':
         help_command = raw_input("Select command: ")
         ftp_help(help_command)
 
+    #DO PASSIVE
     elif choice == 'pasv':
         print("Entering passive mode...")
         resp = ftp_pasv()
@@ -521,7 +572,7 @@ while(True):
         else:
             print(resp[0])
             
-
+    #DO PORT
     elif choice == 'port':
         print("Entering active mode...")
         #Get the IP Address of the machine and open a port on it
@@ -549,7 +600,7 @@ while(True):
             DATA_SOCKET.close()
             print(resp[1])
 
-
+    #DO EXTENDED PASSIVE
     elif choice == 'epsv':
         print("Entering passive mode...")
         resp = ftp_epsv()
@@ -567,6 +618,7 @@ while(True):
             else:
                 print("Error establishing data connection")
 
+    #DO EXTENDED PORT
     elif choice == 'eprt':
         my_ip = CONTROL_SOCKET.getsockname()[0]
 
@@ -584,10 +636,12 @@ while(True):
             DATA_SOCKET.close()
             print(resp[1])
 
+    #DO PWD
     elif choice == 'pwd':
         resp = ftp_pwd()
         print(resp[1])
 
+    #DO LIST
     elif choice == 'ls':
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
@@ -607,11 +661,13 @@ while(True):
             else:
                 print(resp[1])
 
+    #DO CWD
     elif choice == 'cd':
         directory = raw_input("Enter directory name: ")
         resp = ftp_cwd(directory)
         print(resp[1])
 
+    #DO RETRIEVE
     elif choice == 'get':
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
@@ -631,6 +687,7 @@ while(True):
             else:
                 print(resp[1])
 
+    #DO STORE
     elif choice == 'put':
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
@@ -649,13 +706,16 @@ while(True):
             else:
                 print(resp[1])
 
+    #DO SYSTEM
     elif choice == 'about':
         resp = ftp_syst()
         print(resp[1])
 
+    #DO QUIT
     elif choice == 'quit':
         ftp_quit()
         exit()
 
+    #INVALID COMMAND
     else:
         print(SUPPORTED_COMMANDS)
