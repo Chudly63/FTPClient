@@ -24,7 +24,7 @@ DATA_SOCKET = None                                  #Socket for Data Connection
 TARGET_ADDR = None                                  #IP Address of the FTP server
 TARGET_PORT = None                                  #Port Number for the Control Connection at the FTP server
 LOG_FILE = None                                     #Name of the log file
-BUFFER_SIZE = 4000                                  #Buffer for reading from FTP server
+BUFFER_SIZE = 1024                                  #Buffer for reading from FTP server
 VERBOSE = False                                     #Should the client print logging info to stdout?
 CRLF = "\r\n"                                       
 SUPPORTED_COMMANDS = """\nSupported Commands:       
@@ -188,12 +188,10 @@ def sendFile(socket, filename):
         return None
     sendBuffer = sendFile.read(BUFFER_SIZE)
     while not sendBuffer == "":
-        print("Sending data...")
         socket.send(sendBuffer)
         sendBuffer = sendFile.read(BUFFER_SIZE)
     sendFile.close()
     socket.close()
-    print("Done")
 
 
 """
