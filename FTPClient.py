@@ -14,14 +14,15 @@ import re
 import getpass
 import datetime
 import time
+import os
 
 
 """
 Last Chance Checklist
-[ ] Finish Documentation
-[ ] Handle Filename Errors
-[ ] Organize Commands into methods
-[ ] DATA_SOCKET = None lines
+[x] Finish Documentation
+[x] Handle Filename Errors
+[x] DATA_SOCKET = None lines
+[ ] Remove default arguments
 """
 
 
@@ -189,7 +190,11 @@ Input:
     filename: The name of the file to be sent
 """
 def sendFile(socket, filename):
-    sendFile = open(filename, "r+")
+    try:
+        sendFile = open(filename, "r+")
+    except IOError as e:
+        print("File path does not exist.")
+        return None
     sendBuffer = sendFile.read(BUFFER_SIZE)
     while not sendBuffer == "":
         print("Sending data...")
@@ -207,7 +212,11 @@ Input:
     filename: The name of the file to save the data under
 """
 def readFile(socket, filename):
-    newFile = open(filename, "w+")
+    try:
+        newFile = open(filename, "w+")
+    except IOError as e:
+        print("File path does not exist.")
+        return None
     newFile.write(recvall(socket))
     newFile.close()
 
@@ -451,7 +460,7 @@ def ftp_help(argument = None):
     if argument == "":
         print(SUPPORTED_COMMANDS)
     elif argument == "about":
-        print("about:       Show system information.")
+        print("about:       Show server system information.")
     elif argument == "cd":
         print("cd:          Change current working directory.")
     elif argument == "eprt":
@@ -506,8 +515,8 @@ def ftp_login():
 
 parser = argparse.ArgumentParser(description = "FTP client written by Alex M Brown.", epilog = "Have a nice day <3")
 parser.add_argument('-v','--verbose', action='store_true', help="Print notes to cmdline. Useful for debugging")
-parser.add_argument('IP_ADDR', nargs='?', default = '10.246.251.93', help="The IP Address or Name of the FTP server")
-parser.add_argument('LOG_FILE', nargs='?', default = 'myLog.txt', help="The name of the file for the client logs")
+parser.add_argument('IP_ADDR', help="The IP Address or Name of the FTP server")
+parser.add_argument('LOG_FILE', help="The name of the file for the client logs")
 parser.add_argument('PORT_NUM', nargs='?', default = 21, type = int, help="The port number of the FTP server. [Default = 21]")
 args = vars(parser.parse_args(sys.argv[1:]))
 
@@ -533,6 +542,7 @@ CONTROL_SOCKET = establish_connection(TARGET_ADDR, TARGET_PORT)
 
 if not CONTROL_SOCKET:
     print("Failed to establish control connection")
+    log("Connection Failed")
     exit()
 
 
@@ -549,6 +559,7 @@ while(True):
     choice = raw_input("myFTP> ")
 
     #DO HELP
+    #Read an optional command from the user and print that command's help text
     if choice == 'help':
         help_command = raw_input("Select command: ")
         ftp_help(help_command)
@@ -620,14 +631,18 @@ while(True):
 
     #DO EXTENDED PORT
     elif choice == 'eprt':
+        #Get local ip address
         my_ip = CONTROL_SOCKET.getsockname()[0]
 
+        #Open data port & get the port number
         DATA_SOCKET = socket(AF_INET, SOCK_STREAM)
         DATA_SOCKET.bind((my_ip, 0))
 
         my_port = DATA_SOCKET.getsockname()[1]
 
         DATA_SOCKET.listen(1)
+
+        #Give the socket address to the server
         resp = ftp_eprt(1, my_ip, my_port)
         if resp[0] == '200':
             ACTIVE_MODE = True
@@ -639,25 +654,33 @@ while(True):
     #DO PWD
     elif choice == 'pwd':
         resp = ftp_pwd()
-        print(resp[1])
+        print(resp[1])      #No matter the response code, print the message from the server
 
     #DO LIST
     elif choice == 'ls':
+        #Check for data connection
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
         else:
+            #Read optional argument from user & send request
             subject = raw_input("Enter optional file/directory: ")
             resp = ftp_list(subject)
+            #Check if the request was OK
             if resp[0] == '150':
+                #Do we need to accept a connection from the server?
                 if ACTIVE_MODE:
                     DATA_SOCKET, address = DATA_SOCKET.accept()
                     log("Accepted data connection from Server")
+                #Read everything from the data connection & display it
                 list_info = recvall(DATA_SOCKET)
                 print(list_info)
                 resp = parse_response(readSocket(CONTROL_SOCKET))
+                #Check if something went wrong & display the error
                 if not resp[0] == '226':
                     print(resp[1])
-                    DATA_SOCKET.close()
+                #End the data connection.
+                DATA_SOCKET.close()
+                DATA_SOCKET = None
             else:
                 print(resp[1])
 
@@ -665,57 +688,84 @@ while(True):
     elif choice == 'cd':
         directory = raw_input("Enter directory name: ")
         resp = ftp_cwd(directory)
-        print(resp[1])
+        print(resp[1])      #Whether the command succeeded or not, print the response from the server
 
     #DO RETRIEVE
     elif choice == 'get':
+        #Check for data connection
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
         else:
+            #Select file to read
             filename = raw_input("Enter name of desired file: ")
             resp = ftp_retr(filename)
+            #If the server approves:
             if resp[0] == '150' or resp[0] == '125':
+                #Ask the user to select a savename for the file
                 savename = raw_input("Save file as: ")
+                #Do we need to accept a connection from the server?
                 if ACTIVE_MODE:
                     DATA_SOCKET, address = DATA_SOCKET.accept()
                     log("Accepted data connection from Server")
+                #Read everything from the data connection and save it to the savename specified by the uer
                 readFile(DATA_SOCKET, savename)
                 resp2 = parse_response(readSocket(CONTROL_SOCKET))
+                #Check for errors and display them
                 if not resp2[0] == '226':
                     print(resp2[1])
-                    DATA_SOCKET.close()
+                #Close the data connection
+                DATA_SOCKET.close()
+                DATA_SOCKET = None
             else:
                 print(resp[1])
 
     #DO STORE
     elif choice == 'put':
+        #Check for data connection
         if not DATA_SOCKET:
             print("Need to establish data connection. Use pasv, port, eprt, or epsv first")
         else:
+            #What file are we sending?
             filename = raw_input("Enter name of your file: ")
-            resp = ftp_stor(filename)
-            if resp[0] == '150' or resp[0] == '125':
-                if ACTIVE_MODE:
-                    DATA_SOCKET, address = DATA_SOCKET.accept()
-                    log("Accepted data connection from Server")
-                sendFile(DATA_SOCKET, filename)
-                resp = parse_response(readSocket(CONTROL_SOCKET))
-                if not resp[0] == '226':
-                    print(resp[1])
+            #Make sure that file exists and send the command
+            if os.path.isfile(filename):
+                resp = ftp_stor(filename)
+                #Are we good to send the file?
+                if resp[0] == '150' or resp[0] == '125':
+                    #Do we need to accept a connection from the server?
+                    if ACTIVE_MODE:
+                        DATA_SOCKET, address = DATA_SOCKET.accept()
+                        log("Accepted data connection from Server")
+                    #Send all the data in the file
+                    sendFile(DATA_SOCKET, filename)
+                    resp = parse_response(readSocket(CONTROL_SOCKET))
+                    #Check for errors and display them
+                    if not resp[0] == '226':
+                        print(resp[1])
+                    #Close the data connection
                     DATA_SOCKET.close()
+                    DATA_SOCKET = None
+                else:
+                    print(resp[1])
             else:
-                print(resp[1])
+                print("File not Found")
 
     #DO SYSTEM
     elif choice == 'about':
         resp = ftp_syst()
-        print(resp[1])
+        print(resp[1])          #Display the response from the server
 
     #DO QUIT
+    #Send quit command and close sockets. Exit program
     elif choice == 'quit':
         ftp_quit()
+        if CONTROL_SOCKET:
+            CONTROL_SOCKET.close()
+        if DATA_SOCKET:
+            DATA_SOCKET.close()
         exit()
 
     #INVALID COMMAND
     else:
+        print("Unknown Command")
         print(SUPPORTED_COMMANDS)
