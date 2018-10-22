@@ -17,15 +17,6 @@ import time
 import os
 
 
-"""
-Last Chance Checklist
-[x] Finish Documentation
-[x] Handle Filename Errors
-[x] DATA_SOCKET = None lines
-[ ] Remove default arguments
-"""
-
-
 
 #GLOBAL VARIABLES
 CONTROL_SOCKET = None                               #Socket for Control Connection
@@ -550,6 +541,7 @@ readSocket(CONTROL_SOCKET)
 
 #Log the user in
 if not ftp_login():
+    log("Failed to authenticate user")
     exit()
 
 #Begin UI

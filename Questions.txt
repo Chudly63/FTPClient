@@ -1,0 +1,18 @@
+﻿Alex M Brown
+CS472
+Homework 2 Questions
+
+1. Think about the conversation of FTP – how does each side validate the other (on the connection and data ports – think of each separately)? How do they trust that they’re getting a connection from the right person.
+
+The control connection between client and server is somewhat easy to validate because it never closes. The client connects to the server using TCP, and since the connection never closes, the client can trust that it is sending its information to the right place. 
+
+On the data connection, the client and server can only be partly sure they are connected to the right person. When in active mode, the client opens a port and sends the socket address to the server over PORT or EPRT. Once the client sends a command which requires a data transfer, the server creates the data connection between itself and the port opened by the client. The issue here is that another process my connect to that port before the server does. Since the server does not initiate the data connection while in active mode until the client asks for data, the port on the client host remains open for a period of time long enough for a malicious program to find and connect to it. 
+
+When in passive mode, the opposite applies. The server opens a port and sends the socket address to the client, at which point the client connects to the server. The port on the server is left open until the client connects to it, during which time another process would be able to intercept the connection. 
+
+
+2. How does your client know that it’s sending the right commands in the right order? How does it know the sender is trustworthy?
+
+It is easy for the client to send commands in the right order because there are very few commands that require a “right order”, and those that do will tell the client when this occurs. For example, the PASS command is only to be sent immediately after a USER command. If the server receives a PASS command any other time, it returns a response code which tells the client, “Hey, you sent that at the wrong time.” Another example is whenever the client sends a request for data (e.g. RETR, STOR, LIST) when the server does not have a data connection yet. In this instance, the server tells the client, “You need to use PORT or PASV first.”
+
+The only means FTP has to know if its sender is trustworthy is through authentication using USER and PASS. The protocol assumes that if someone is able to log in to the server(s) being used, they must know what they’re doing. If a user who wanted to cause harm was able to log into the server, there is nothing FTP could do to stop them. 
